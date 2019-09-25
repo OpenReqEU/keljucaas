@@ -1,11 +1,15 @@
 package eu.openreq.keljucaas.domain.release;
 
+import java.util.LinkedList;
+import java.util.List;
+
 import org.chocosolver.solver.Model;
 import org.chocosolver.solver.constraints.Constraint;
 import org.chocosolver.solver.variables.BoolVar;
 import org.chocosolver.solver.variables.IntVar;
 
 import eu.openreq.keljucaas.services.CSPPlanner;
+import eu.openreq.keljucaas.services.CSPPlanner.DiagnosableClass;
 import fi.helsinki.ese.murmeli.Container;
 import fi.helsinki.ese.murmeli.Element;
 import fi.helsinki.ese.murmeli.ElementModel;
@@ -14,7 +18,7 @@ import fi.helsinki.ese.murmeli.ElementModel;
  * Element is transformed so that Choco solver can understand it.
  * 
  */
-public class Element4Csp implements Diagnosable{
+public class Element4Csp implements Diagnosable, Comparable<Element4Csp> {
 	private BoolVar isIncluded;
 	private IntVar assignedContainer;
 	private int originalContainerAssigment;
@@ -29,6 +33,7 @@ public class Element4Csp implements Diagnosable{
 	private String nameID;
 	private ElementModel elementModel;
 	private Element element = null;
+	private List<Relationship4Csp> referringRels= new LinkedList<>();
 
 	public Element4Csp(Element element, CSPPlanner planner, Model model, ElementModel elementModel) {
 		this.model = model;
@@ -201,6 +206,7 @@ public class Element4Csp implements Diagnosable{
 
 
 	public void require(boolean include) {
+		//System.out.println("Require " + include + " " + getNameId());
 		if (include) {
 			if (requirePosted) {
 				return;
@@ -211,6 +217,9 @@ public class Element4Csp implements Diagnosable{
 				model.unpost(denyCstr);
 				denyPosted = false;
 			}
+			//When a requirement is included, also relationships referring to it must be included
+			//This should make fastdiag able to make better/correct  diagnoses in case of relationship and requirement diagnosis.
+			//requireDependencies();
 		} else { // not include = deny
 			if (denyPosted) {
 				return;
@@ -227,6 +236,7 @@ public class Element4Csp implements Diagnosable{
 
 
 	public void unRequire() {
+		//System.out.println("Unequire " + getNameId());
 		if (denyPosted) {
 			model.unpost(denyCstr);
 			denyPosted = false;
@@ -234,6 +244,12 @@ public class Element4Csp implements Diagnosable{
 		if (requirePosted) {
 			model.unpost(requireCstr);
 			requirePosted = false;
+		}
+	}
+	
+	public void requireDependencies() {
+		for (Relationship4Csp rel: getReferringRels()) {
+			rel.require(true);
 		}
 	}
 
@@ -253,7 +269,46 @@ public class Element4Csp implements Diagnosable{
 		return "Element4Csp [id=" + id + ", nameID=" + nameID + "]";
 	}
 		
+	public void addRereferringRel(Relationship4Csp rel) {
+		referringRels.add(rel);
+	}
 
-	
+
+	public final List<Relationship4Csp> getReferringRels() {
+		return referringRels;
+	}
+
+
+	@Override
+	public int compareTo(Element4Csp other) {
+		//for java, smaller first is the default sort order
+		//for OpenReq, smaller priority is higher
+		//so we want to get smallest priority number first
+		int diff = this.priority.getLB() - other.priority.getLB();
+		if (diff != 0)
+			return diff;
+		//if an element has many relationships, it might be more important
+		diff = other.referringRels.size() - this.referringRels.size();
+		if (diff != 0)
+			return diff;
+		if (this.nameID == null) {
+			if (other.nameID ==null)
+				return 0;
+			else
+				return 1;
+		}
+		else {
+			if (other.nameID ==null)
+				return -1;
+			else
+				return this.getNameId().compareTo(other.getNameId());
+		}
+	}
+
+	@Override
+	public DiagnosableClass getDiagnosableClass () {
+		return DiagnosableClass.REQUIREMENT;
+	}
+
 }
 

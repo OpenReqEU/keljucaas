@@ -2,6 +2,8 @@ package eu.openreq.keljucaas.domain.release;
 
 import org.chocosolver.solver.Model;
 
+import eu.openreq.keljucaas.domain.release.Relationship4Csp.RelationshipClass;
+
 public class RequiresRelationship4Csp extends Relationship4Csp {
 
 	public RequiresRelationship4Csp(Element4Csp from, Element4Csp to, Model model, Integer id) {
@@ -33,5 +35,10 @@ public class RequiresRelationship4Csp extends Relationship4Csp {
 	public final String getRelationShipName() {
 		return "requires";
 	}
+	
+	protected RelationshipClass getRelationshipClass() {
+		return RelationshipClass.REQUIRES;
+	}
+
 }
 

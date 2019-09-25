@@ -4,7 +4,18 @@ import org.chocosolver.solver.Model;
 import org.chocosolver.solver.constraints.Constraint;
 import org.chocosolver.solver.variables.BoolVar;
 
-public abstract class Relationship4Csp implements Diagnosable {
+import eu.openreq.keljucaas.services.CSPPlanner.DiagnosableClass;
+
+public abstract class Relationship4Csp implements Diagnosable, Comparable<Relationship4Csp> {
+	
+	enum RelationshipClass {
+		EXLUDES,
+		REQUIRES,
+		DECOMPOSITION,
+		IMPLIES,
+		INCOMPATIBLE
+	}
+	
 	private Element4Csp from;
 	private Element4Csp to;
 	private BoolVar isIncluded;
@@ -16,6 +27,8 @@ public abstract class Relationship4Csp implements Diagnosable {
 	private Model model;
 	private Integer id;
 	private String nameId;
+	
+	protected abstract RelationshipClass getRelationshipClass();
 	
 	public Relationship4Csp(Element4Csp from, Element4Csp to, Model model, Integer id) {
 		this.from = from;
@@ -34,6 +47,8 @@ public abstract class Relationship4Csp implements Diagnosable {
 
 
 	public void require(boolean include) {
+		//System.out.println("Require rel " + include + " " + getNameId());
+
 		if (include) {
 			if (requirePosted) {
 				return;
@@ -59,6 +74,7 @@ public abstract class Relationship4Csp implements Diagnosable {
 	}
 
 	public void unRequire() {
+		//System.out.println("Unrequire rel "  + getNameId());
 		if (denyPosted) {
 			getModel().unpost(denyCstr);
 			denyPosted = false;
@@ -83,12 +99,6 @@ public abstract class Relationship4Csp implements Diagnosable {
 	public String toString() {
 		return getFrom() + " " + getRelationShipName() + " "+ getTo();
 	}
-	
-//	@Override
-//	public String toString() {
-//		return "Relationship4Csp [from=" + getFrom() + ", relationshipType=" + getRelationShipName() + ", to=" + getTo() + "]";
-//	}
-
 
 	public Constraint getRelationShipConstraint() {
 		return relationShipConstraint;
@@ -125,5 +135,14 @@ public abstract class Relationship4Csp implements Diagnosable {
 	protected void determineNameId() {
 		this.setNameId("rel_" + this.getFrom().getNameId()+"_" + getRelationShipName() + "_" + this.getTo().getNameId());
 	}
-
+	
+	@Override
+	public int compareTo(Relationship4Csp other) {
+		return this.getRelationshipClass().compareTo(other.getRelationshipClass());
+	}
+	
+	@Override
+	public DiagnosableClass getDiagnosableClass () {
+		return DiagnosableClass.RELATIONSHIP;
+	}
 }

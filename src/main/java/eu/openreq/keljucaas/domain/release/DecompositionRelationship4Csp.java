@@ -18,6 +18,7 @@ public class DecompositionRelationship4Csp extends Relationship4Csp {
 		// from.assignedrelease
 		Model model = getModel();
 		setRelationShipConstraint(model.or(
+				model.and(model.arithm(getFrom().getIsIncluded(), "=", 0), model.arithm(getTo().getIsIncluded(), "=", 0)),
 				model.arithm(getFrom().getIsIncluded(), "=", 0),
 				model.and(
 						model.arithm(getFrom().getIsIncluded(), "=", 1),
@@ -30,10 +31,11 @@ public class DecompositionRelationship4Csp extends Relationship4Csp {
 	
 	@Override
 	protected boolean isSatisfiedWithAssignment(int releaseOfFrom, int releaseOfTo) {
-		if (releaseOfFrom == 0)
-			return true;
 		if (releaseOfTo == 0) //parent will not be complete without child TODO check if prioriity affectd
-			return false; //rely on priority to to have domain size 1, LB has the priority; 
+			if (releaseOfFrom == 0)
+				return true;
+			else
+				return false;
 		else if ((releaseOfTo > releaseOfFrom) && (getTo().getPriority().getLB() <= getFrom().getPriority().getLB()))
 			return false;
 		else
@@ -44,6 +46,10 @@ public class DecompositionRelationship4Csp extends Relationship4Csp {
 	@Override
 	public final String getRelationShipName() {
 		return "decomposition";
+	}
+	
+	protected RelationshipClass getRelationshipClass() {
+		return RelationshipClass.DECOMPOSITION;
 	}
 
 }

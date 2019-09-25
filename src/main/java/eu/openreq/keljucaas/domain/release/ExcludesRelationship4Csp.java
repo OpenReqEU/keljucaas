@@ -2,6 +2,8 @@ package eu.openreq.keljucaas.domain.release;
 
 import org.chocosolver.solver.Model;
 
+import eu.openreq.keljucaas.domain.release.Relationship4Csp.RelationshipClass;
+
 
 public class ExcludesRelationship4Csp extends Relationship4Csp {
 
@@ -25,5 +27,10 @@ public class ExcludesRelationship4Csp extends Relationship4Csp {
 	public final String getRelationShipName() {
 		return "excludes";
 	}
+	
+	protected RelationshipClass getRelationshipClass() {
+		return RelationshipClass.EXLUDES;
+	}
+
 }
 

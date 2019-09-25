@@ -2,6 +2,8 @@ package eu.openreq.keljucaas.domain.release;
 
 import org.chocosolver.solver.Model;
 
+import eu.openreq.keljucaas.domain.release.Relationship4Csp.RelationshipClass;
+
 
 public class IncompatibleRelationship4Csp extends Relationship4Csp {
 
@@ -38,6 +40,9 @@ public class IncompatibleRelationship4Csp extends Relationship4Csp {
 	
 	public final String getRelationShipName() {
 		return "incompatible";
+	}
+	protected RelationshipClass getRelationshipClass() {
+		return RelationshipClass.INCOMPATIBLE;
 	}
 
 

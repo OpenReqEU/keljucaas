@@ -1,15 +1,17 @@
 package eu.openreq.keljucaas.services;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 
 import org.chocosolver.solver.Model;
 import org.chocosolver.solver.Solver;
 import org.chocosolver.solver.variables.IntVar;
 
+import eu.openreq.keljucaas.domain.hsdag.ConflictDetectionHSDAG;
+import eu.openreq.keljucaas.domain.hsdag.DiagnosesCollection;
+import eu.openreq.keljucaas.domain.hsdag.FastDiag;
+import eu.openreq.keljucaas.domain.hsdag.ListUtil;
 import eu.openreq.keljucaas.domain.release.DecompositionRelationship4Csp;
 import eu.openreq.keljucaas.domain.release.Diagnosable;
 import eu.openreq.keljucaas.domain.release.Element4Csp;
@@ -56,6 +58,11 @@ import fi.helsinki.ese.murmeli.Relationship.NameType;
  *  * 
  */
 public class CSPPlanner {
+	
+	public enum DiagnosableClass {
+		REQUIREMENT,
+		RELATIONSHIP
+	}
 
 	public final static int UNASSIGNED_RELEASE = 0; 
 
@@ -98,6 +105,7 @@ public class CSPPlanner {
 		generateCSP();
 
 		initializeReleaseStates();
+		generateDependencyLists();
 //		ReleasePlanInfo submittedReleasePlan = releaseStates.get("submitted");
 		//allocateOriginallyAsssignedElements(submittedReleasePlan);
 		//releaseStates.put(submittedReleasePlan.getIdString(), submittedReleasePlan);
@@ -240,6 +248,12 @@ public class CSPPlanner {
 		}
 	}
 
+	private void generateDependencyLists() {
+		for (Relationship4Csp rel : relationship4Csps) {
+			rel.getFrom().addRereferringRel(rel);
+			rel.getTo().addRereferringRel(rel);
+		}
+	}
 
 	protected ReleasePlanInfo createInitialState (ReleasePlanInfo releasePlanInfo) {
 
@@ -353,8 +367,9 @@ public class CSPPlanner {
 			if ((requireFailedForDiagnosis != null) && requireFailedForDiagnosis.isConsistent())
 					isAnalysisRequired = false;
 			if (isAnalysisRequired) {
-				List<Diagnosable> diagnosis = getDiagnosis(diagnoseElements, diagnoseRelations);
-				List<Diagnosable> included = diffListsAsSets(all, diagnosis);
+				List<Diagnosable> diagnosis = getDiagnosisFastDiag(diagnoseElements, diagnoseRelations);
+				List<Diagnosable> included = ListUtil.diffListsAsSets(all, diagnosis);
+				DiagnosesCollection fooCollection = getDiagnosesHSDAG(diagnoseElements, diagnoseRelations);
 				setRequirementsToList(included);
 				boolean OK = consistent(included);
 				releasePlanInfo.setConsistent(OK);
@@ -384,8 +399,7 @@ public class CSPPlanner {
 
 	}
 
-
-	protected List<Diagnosable> getDiagnosis(boolean diagnoseElements, boolean diagnoseRelations) {
+	private List<Diagnosable> getDiagnosableElementsAndRequireOthers(boolean diagnoseElements, boolean diagnoseRelations) {
 		List<Diagnosable> allElements = new ArrayList<>();
 		this.diagnoseElements = diagnoseElements;
 		this.diagnoseRelations = diagnoseRelations;
@@ -402,11 +416,38 @@ public class CSPPlanner {
 				allElements.add(relationship4Csp);
 		else
 			requireAllRelations();
+		
+		return allElements;
+	}
+	
 
-		return fastDiag(allElements, allElements);
+	protected List<Diagnosable> getDiagnosisFastDiag(boolean diagnoseElements, boolean diagnoseRelations) {
+		List<Diagnosable> allElements =  getDiagnosableElementsAndRequireOthers(diagnoseElements, diagnoseRelations);
+		FastDiag fastDiag = new FastDiag(AC -> consistent(AC));
+		return fastDiag.fastDiag(allElements, allElements);
+	}
+	
+	protected DiagnosesCollection getDiagnosesHSDAG(boolean diagnoseElements, boolean diagnoseRelations) {
+		List<Diagnosable> allElements =  getDiagnosableElementsAndRequireOthers(diagnoseElements, diagnoseRelations);
+
+		ConflictDetectionHSDAG conflictDetectionHSDAG = new 
+		 ConflictDetectionHSDAG( 
+				 allElements, AC -> consistent(AC));
+		DiagnosesCollection diagnoses = conflictDetectionHSDAG.diagnose();
+		return diagnoses;
 	}
 
+
 	private void setRequirementsToList(List<Diagnosable> elementsToSet) {
+//		StringBuilder sb = new StringBuilder();
+//		sb.append("setRequirementsToList:" );
+//		sb.append(" diagnoseElements "+ diagnoseElements);
+//		sb.append(" diagnoseRelations "+ diagnoseRelations);
+//		for (Diagnosable d : elementsToSet) {
+//			sb.append(" ");
+//			sb.append(d.getNameId());
+//		}
+//		System.out.println(sb.toString());
 		if (diagnoseElements)
 			for (int i = 0; i < nElements; i++) {
 				element4CSPs[i].unRequire();
@@ -430,6 +471,7 @@ public class CSPPlanner {
 		Solver solver = model.getSolver();
 		solver.reset();
 		boolean result = solver.solve();
+//		System.out.println("consistent: " + result);
 		//		if (result)
 		//			solution.record();
 		return result;
@@ -444,22 +486,22 @@ public class CSPPlanner {
 	 * @param AC
 	 * @return
 	 */
-	private List<Diagnosable> fastDiag(List<Diagnosable> C, List<Diagnosable> AC) {
-
-		if (C.isEmpty()) {
-			return Collections.emptyList();
-		}
-		if (consistent(C)) {
-			return Collections.emptyList();
-		}
-
-		List<Diagnosable> ACWithoutC = diffListsAsSets(AC, C);
-		Boolean searchForDiagnosis = consistent(ACWithoutC);
-		if (!searchForDiagnosis) {
-			return Collections.emptyList();
-		}
-		return fd(Collections.emptyList(), C, AC);
-	}
+//	private List<Diagnosable> fastDiag(List<Diagnosable> C, List<Diagnosable> AC) {
+//
+//		if (C.isEmpty()) {
+//			return Collections.emptyList();
+//		}
+//		if (consistent(C)) {
+//			return Collections.emptyList();
+//		}
+//
+//		List<Diagnosable> ACWithoutC = diffListsAsSets(AC, C);
+//		Boolean searchForDiagnosis = consistent(ACWithoutC);
+//		if (!searchForDiagnosis) {
+//			return Collections.emptyList();
+//		}
+//		return fd(Collections.emptyList(), C, AC);
+//	}
 
 
 	/**
@@ -474,58 +516,111 @@ public class CSPPlanner {
 	 *            user constraints
 	 * @return a diagnose
 	 */
-	private List<Diagnosable> fd(List<Diagnosable> D, List<Diagnosable> C, List<Diagnosable> AC) {
-
-		boolean isConsistent = consistent(AC);
-		int q = C.size();
-
-		if (!D.isEmpty()) {
-			if (isConsistent) {
-				return Collections.emptyList();
-			}
-		}
-
-		if (q == 1) {
-			return new LinkedList<Diagnosable>(C);
-		}
-
-		int k = q / 2;
-		List<Diagnosable> C1 = C.subList(0, k);
-		List<Diagnosable> C2 = C.subList(k, q);
-
-		List<Diagnosable> ACWithoutC2 = diffListsAsSets(AC, C2);
-		List<Diagnosable> D1 = fd(C2, C1, ACWithoutC2);
-
-		List<Diagnosable> ACWithoutD1 = diffListsAsSets(AC, D1);
-		List<Diagnosable> D2 = fd(D1, C2, ACWithoutD1);
-
-		return appendListsAsSets(D1, D2);
-	}
-
-
-	public static List<Diagnosable> appendListsAsSets(List<Diagnosable> CS1, List<Diagnosable> CS2) {
-		List<Diagnosable> union = new ArrayList<>(CS1);
-		if (CS2 == null)
-			return union;
-
-		for (Diagnosable c : CS2) {
-			if (!union.contains(c)) {
-				union.add(c);
-			}
-		}
-		return union;
-	}
-
-
-	public static List<Diagnosable> diffListsAsSets(List<Diagnosable> ac, List<Diagnosable> c2) {
-		List<Diagnosable> diff = new ArrayList<>();
-		for (Diagnosable element : ac) {
-			if (!c2.contains(element)) {
-				diff.add(element);
-			}
-		}
-		return diff;
-	}
+//	private List<Diagnosable> fd(List<Diagnosable> D, List<Diagnosable> C, List<Diagnosable> AC) {
+//		
+////		StringBuilder sb = new StringBuilder();
+////		sb.append("fd:" );
+////		for (Diagnosable d : AC) {
+////			sb.append(" ");
+////			sb.append(d.getNameId());
+////		}
+//
+//		boolean isConsistent = consistent(AC);
+////		sb.append(": isConsistent = ");
+////		sb.append(isConsistent);
+////		System.out.println(sb.toString());
+//
+//		int q = C.size();
+//
+//		if (!D.isEmpty()) {
+//			if (isConsistent) {
+//				return Collections.emptyList();
+//			}
+//		}
+//
+//		if (q == 1) {
+//			return new LinkedList<Diagnosable>(C);
+//		}
+//
+//		int k = q / 2;
+//		List<Diagnosable> C1 = C.subList(0, k);
+//		List<Diagnosable> C2 = C.subList(k, q);
+//
+//		List<Diagnosable> ACWithoutC2 = diffListsAsSets(AC, C2);
+//		List<Diagnosable> D1 = fd(C2, C1, ACWithoutC2);
+//
+//		List<Diagnosable> ACWithoutD1 = diffListsAsSets(AC, D1);
+//		List<Diagnosable> D2 = fd(D1, C2, ACWithoutD1);
+//
+//		return appendListsAsSets(D1, D2);
+//	}
+	
+//	public List<Diagnosable> getMinConflictSet(List<Diagnosable> constraintsSetC) {
+//
+//		if (constraintsSetC.isEmpty() || consistent(constraintsSetC)) {
+//			return Collections.emptyList();
+//		}
+//
+//		return quickXPlain(Collections.emptyList(), constraintsSetC, Collections.emptyList());
+//	}
+//
+//	/**
+//	 * Function that computes minimal conflict sets in QuickXPlain
+//	 * 
+//	 * @param D  A subset from the user constraints set
+//	 * @param C  A subset from the user constraints set
+//	 * @param AC user constraints
+//	 * @return a minimal conflict set
+//	 * @throws DiagnosisException
+//	 */
+//	private List<Diagnosable> quickXPlain(List<Diagnosable> D, List<Diagnosable> C, List<Diagnosable> B) {
+//
+//		if (!D.isEmpty()) {
+//			boolean isConsistent = consistent(B);
+//			if (!isConsistent) {
+//				return Collections.emptyList();
+//			}
+//		}
+//
+//		int q = C.size();
+//		if (q == 1) {
+//
+//			return C;
+//		}
+//
+//		int k = q / 2;
+//		List<Diagnosable> C1 = C.subList(0, k);
+//		List<Diagnosable> C2 = C.subList(k, q);
+//		List<Diagnosable> CS1 = quickXPlain(C2, C1, appendListsAsSets(B, C2));
+//		List<Diagnosable> CS2 = quickXPlain(CS1, C2, appendListsAsSets(B, CS1));
+//		List<Diagnosable> tempCS = appendListsAsSets(CS1, CS2);
+//
+//		return tempCS;
+//	}
+//
+//	public static List<Diagnosable> appendListsAsSets(List<Diagnosable> CS1, List<Diagnosable> CS2) {
+//		List<Diagnosable> union = new ArrayList<>(CS1);
+//		if (CS2 == null)
+//			return union;
+//
+//		for (Diagnosable c : CS2) {
+//			if (!union.contains(c)) {
+//				union.add(c);
+//			}
+//		}
+//		return union;
+//	}
+//
+//
+//	public static List<Diagnosable> diffListsAsSets(List<Diagnosable> ac, List<Diagnosable> c2) {
+//		List<Diagnosable> diff = new ArrayList<>();
+//		for (Diagnosable element : ac) {
+//			if (!c2.contains(element)) {
+//				diff.add(element);
+//			}
+//		}
+//		return diff;
+//	}
 
 	public static boolean isSupported(NameType nameType) {
 		switch (nameType) {
